@@ -114,6 +114,7 @@
     }
 
     function tryRender() {
+      console.log('mainData sample:', mainData && mainData.slice(0, 5));
       if (!mainData || !markerData || !monitorData) return;
       trackGroup.clearLayers();
       trackPointsGroup.clearLayers();
