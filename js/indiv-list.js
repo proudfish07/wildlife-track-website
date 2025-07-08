@@ -1,5 +1,5 @@
 // 這裡換成你自己的 Google Apps Script JSON API 網址
-const indivListUrl = "https://script.google.com/macros/s/AKfycbyWvoxoIm65Rs-NQs95eMUZaar8-P85R1Gsmg9vzvkxeJDbi9FsBU3XI7QxRWWcn2lR/exec";
+const indivListUrl = "data/animal-data.json";
 
 let indivData = [];
 let currentIndiv = null;
