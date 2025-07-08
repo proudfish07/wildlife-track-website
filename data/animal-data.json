@@ -1,0 +1,17 @@
+[
+  {
+    "id": "A001",
+    "name": "加酒穿",
+    "sheet_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSMQAVWyU35axF8U2xIOjIsvD7FpCFjsbdlOGZYhZG5XF7qGgIsOoVc0EaFSpcda6jiObHTvUtbXF9U/pubhtml",
+    "track_points_tab": "追蹤點",
+    "track_points_gid": 0,
+    "raw_data_tab": "原始資料",
+    "raw_data_gid": 2010058197,
+    "annotations_tab": "標註點",
+    "annotations_gid": 730047739,
+    "listening_points_tab": "監聽點",
+    "listening_points_gid": 1274944193,
+    "photo_folder_url": "photo",
+    "track_folder_url": "track"
+  }
+]
