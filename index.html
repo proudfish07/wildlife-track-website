@@ -266,7 +266,7 @@
   }
 
   // 載入個體清單並初始化選單
-  fetch(apiUrl)
+  fetch('data/animal-data.json')
     .then(res => res.json())
     .then(data => {
       individuals = data;
