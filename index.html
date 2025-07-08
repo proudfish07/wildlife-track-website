@@ -122,11 +122,21 @@
       monitorGroup.clearLayers();
 
       const allWithTS = mainData.filter(d => d.timestamp);
-      const latest = allWithTS.reduce((a, b) => new Date(a.timestamp) > new Date(b.timestamp) ? a : b, null);
+      let latest = null;
+      if (allWithTS.length > 0) {
+        latest = allWithTS.reduce((a, b) =>
+          new Date(a.timestamp) > new Date(b.timestamp) ? a : b
+        );
+      }
       document.getElementById('latest-time').textContent = latest ? latest.timestamp : '-';
 
       const valid = allWithTS.filter(d => d.lat && d.lng);
-      const lastPos = valid.reduce((a, b) => new Date(a.timestamp) > new Date(b.timestamp) ? a : b, null);
+      let lastPos = null;
+      if (valid.length > 0) {
+        lastPos = valid.reduce((a, b) =>
+          new Date(a.timestamp) > new Date(b.timestamp) ? a : b
+                              );
+      }
       document.getElementById('last-success-time').textContent = lastPos ? lastPos.timestamp : '-';
 
       const points = valid.map(d => ({
