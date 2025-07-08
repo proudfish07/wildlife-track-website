@@ -122,13 +122,15 @@
       monitorGroup.clearLayers();
 
       const allWithTS = mainData.filter(d => d.timestamp);
+      const validEntries = allWithTS.filter(entry => entry && entry.timestamp);
       let latest = null;
-      if (allWithTS.length > 0) {
-        latest = allWithTS.reduce((a, b) =>
+      if (validEntries.length > 0) {
+        latest = validEntries.reduce((a, b) =>
           new Date(a.timestamp) > new Date(b.timestamp) ? a : b
         );
       }
       document.getElementById('latest-time').textContent = latest ? latest.timestamp : '-';
+
 
       const valid = allWithTS.filter(d => d.lat && d.lng);
       let lastPos = null;
