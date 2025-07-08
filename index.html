@@ -2,26 +2,21 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>穿山甲追蹤地圖 - 多個體選單動態地圖</title>
+  <title>穿山甲追蹤地圖 - 多個體選單</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Leaflet 地圖樣式 -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body { margin:0; padding:0; }
+    #map { height: 100vh; }
     #controls {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 1000;
-      background: rgba(255,255,255,0.98);
-      padding: 12px 18px 10px 14px;
-      border-radius: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
       box-shadow: 0 0 8px rgba(0,0,0,0.3);
-      font-size: 16px;
-      min-width: 230px;
-      max-width: 400px;
     }
-    #map { height: 100vh; width: 100vw; }
     .legend {
       background: white;
       line-height: 1.5;
@@ -29,11 +24,6 @@
       font-size: 14px;
       border-radius: 8px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    }
-    .legend img {
-      vertical-align: middle;
-      height: 20px;
-      width: 20px;
     }
     .info-control {
       background: white;
@@ -43,306 +33,140 @@
       border-radius: 8px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
       margin: 10px;
-      min-width: 260px;
-      max-width: 400px;
-      word-break: break-all;
-    }
-    .leaflet-control.compass-custom {
-      background: white;
-      padding: 4px;
-      border-radius: 6px;
-      box-shadow: 0 0 6px rgba(0,0,0,0.2);
-    }
-    .leaflet-control.compass-custom img {
-      width: 40px;
-      height: 40px;
-      display: block;
-    }
-    @media (max-width: 700px) {
-      #controls { font-size: 13px; min-width:150px; max-width:95vw; }
-      .legend { font-size: 12px; }
-      .info-control { font-size: 13px; min-width:150px; }
     }
   </style>
 </head>
 <body>
   <div id="controls">
-    <label for="individual-select"><b>選擇個體：</b></label>
+    <label for="indiv-select"><b>選擇個體：</b></label>
     <select id="indiv-select"></select>
-    <span id="loading-indicator" style="color:#999;display:none">載入中...</span>
-    <div id="individual-info" style="margin-top:10px; font-size:14px; color:#555;"></div>
   </div>
   <div id="map"></div>
 
-  <!-- Leaflet & 相關外掛 -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <!-- 若需 GPX，可引入 GPX 外掛 -->
-  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.5.1/gpx.min.js"></script> -->
-
   <script>
-  // ==== 1. 參數設定 ====
-  // 請將下行 apiUrl 換成你的 Google Apps Script JSON API 連結
-  const apiUrl = "https://script.google.com/macros/s/AKfycbzSknGIlu5d8IHn7JbLUcMlQRv2dgA32XGyIXfVnCjiqKccQaCMRypLTEvf7ExGEFd4/exec";
+    const map = L.map('map').setView([22.91, 121.09], 15);
+    const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  // ==== 2. Leaflet 地圖初始化 ====
-  const map = L.map('map').setView([22.91, 121.09], 15);
-  // 底圖
-  const normalMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-  }).addTo(map);
-  const contourMap = L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png', {
-    attribution: 'Map data: &copy; OpenTopoMap (CC-BY-SA)', maxZoom: 17
-  });
-  const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, etc', maxZoom: 19
-  });
-  const baseMaps = {
-    "一般地圖": normalMap,
-    "等高線地圖": contourMap,
-    "衛星圖": satelliteMap
-  };
-  L.control.layers(baseMaps, null, {collapsed:true, position:'topright'}).addTo(map);
-  L.control.scale().addTo(map);
+    const trackGroup = L.layerGroup().addTo(map);
+    const trackPointsGroup = L.layerGroup().addTo(map);
+    const markerGroup = L.layerGroup().addTo(map);
+    const monitorGroup = L.layerGroup().addTo(map);
 
-  // ==== 3. 圖層組 ====
-  const trackGroup = L.layerGroup().addTo(map);
-  const trackPointsGroup = L.layerGroup().addTo(map);
-  const markerGroup = L.layerGroup().addTo(map);
-  const monitorGroup = L.layerGroup().addTo(map);
+    const animalIcon = L.icon({ iconUrl: 'animal-icon.png', iconSize: [40, 40], iconAnchor: [20, 40] });
+    const eyeIcon = L.icon({ iconUrl: 'eye-icon.png', iconSize: [25, 25], iconAnchor: [12, 12] });
+    const signalIcon = L.icon({ iconUrl: 'signal-icon.png', iconSize: [25, 25], iconAnchor: [12, 12] });
 
-  // ==== 4. 自訂圖示 ====
-  const animalIcon = L.icon({
-    iconUrl: 'animal-icon.png', iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -40]
-  });
-  const eyeIcon = L.icon({
-    iconUrl: 'eye-icon.png', iconSize: [25, 25], iconAnchor: [12, 12], popupAnchor: [0, -12]
-  });
-  const signalIcon = L.icon({
-    iconUrl: 'signal-icon.png', iconSize: [25, 25], iconAnchor: [12, 12], popupAnchor: [0, -12]
-  });
+    let individuals = [], currentIndividual = null;
+    let mainData = null, markerData = null, monitorData = null;
 
-  // ==== 5. 資訊欄 ====
-  const infoControl = L.control({ position: 'topleft' });
-  infoControl.onAdd = function(map) {
-    const div = L.DomUtil.create('div', 'info-control');
-    div.innerHTML = `
-      <b>最近工作日</b>：<span id="latest-time">-</span><br>
-      <b>最後定位日</b>：<span id="last-success-time">-</span>
-    `;
-    return div;
-  };
-  infoControl.addTo(map);
+    L.control.scale().addTo(map);
+    const infoControl = L.control({ position: 'topleft' });
+    infoControl.onAdd = function(map) {
+      const div = L.DomUtil.create('div', 'info-control');
+      div.innerHTML = `
+        <b>最近工作日</b>：<span id="latest-time">-</span><br>
+        <b>最後定位日</b>：<span id="last-success-time">-</span>
+      `;
+      return div;
+    };
+    infoControl.addTo(map);
 
-  // ==== 6. 圖例 ====
-  const legend = L.control({ position: 'bottomright' });
-  legend.onAdd = function(map) {
-    const div = L.DomUtil.create('div', 'legend');
-    div.innerHTML = `
-      <b>圖例</b><br>
-      <img src="animal-icon.png"> 最新位置<br>
-      <span style="color: blue;">●</span> 移動路徑<br>
-      <img src="eye-icon.png"> 發現點<br>
-      <img src="signal-icon.png"> 監聽點
-    `;
-    return div;
-  };
-  legend.addTo(map);
+    fetch('data/animal-data.json')
+      .then(res => res.json())
+      .then(data => {
+        individuals = data;
+        const select = document.getElementById('indiv-select');
+        individuals.forEach((indiv, idx) => {
+          const opt = document.createElement('option');
+          opt.value = idx;
+          opt.textContent = `${indiv.name} (${indiv.id})`;
+          select.appendChild(opt);
+        });
+        select.addEventListener('change', () => {
+          const idx = parseInt(select.value);
+          if (individuals[idx]) loadIndividual(individuals[idx]);
+        });
+        if (individuals.length > 0) loadIndividual(individuals[0]);
+      });
 
-  // ==== 7. 個體選單載入 ====
-  let individuals = [];
-  let currentIndividual = null;
-  let mainData = null, markerData = null, monitorData = null;
-  let layersInitialized = false;
+    function loadIndividual(indiv) {
+      currentIndividual = indiv;
+      mainData = markerData = monitorData = null;
+      trackGroup.clearLayers();
+      trackPointsGroup.clearLayers();
+      markerGroup.clearLayers();
+      monitorGroup.clearLayers();
 
-  function showLoading(show) {
-    document.getElementById('loading-indicator').style.display = show ? "" : "none";
-  }
+      const base = `https://docs.google.com/spreadsheets/d/${indiv.sheet_id}/export?format=csv&gid=`;
+      const urls = {
+        main: base + indiv.main_gid,
+        marker: base + indiv.marker_gid,
+        monitor: base + indiv.monitor_gid
+      };
 
-  // 取得分頁 gid（預設為 0，如需更精準，建議 API 提供 gid）
-  function getGidFromUrl(sheetUrl, tabName) {
-    // 這裡建議將個體 JSON 結構加入各分頁 gid
-    // 若只有一分頁，預設為 gid=0
-    return '0';
-  }
+      Papa.parse(urls.main, { download: true, header: true, complete: r => { mainData = r.data; tryRender(); } });
+      Papa.parse(urls.marker, { download: true, header: true, complete: r => { markerData = r.data; tryRender(); } });
+      Papa.parse(urls.monitor, { download: true, header: true, complete: r => { monitorData = r.data; tryRender(); } });
+    }
 
-  // 將個體資訊顯示於 info 區塊
-  function renderIndividualInfo(indiv) {
-    document.getElementById('individual-info').innerHTML = `
-      <b>個體編號：</b>${indiv.id}<br>
-      <b>名稱：</b>${indiv.name}<br>
-      <a href="${indiv.sheet_url}" target="_blank">Google Sheet 來源</a>
-    `;
-  }
+    function tryRender() {
+      if (!mainData || !markerData || !monitorData) return;
+      trackGroup.clearLayers();
+      trackPointsGroup.clearLayers();
+      markerGroup.clearLayers();
+      monitorGroup.clearLayers();
 
-  // 主渲染函式
-  function tryRender() {
-    if (!mainData || !markerData || !monitorData) return;
-    // 清空 group
-    trackGroup.clearLayers();
-    trackPointsGroup.clearLayers();
-    markerGroup.clearLayers();
-    monitorGroup.clearLayers();
+      const allWithTS = mainData.filter(d => d.timestamp);
+      const latest = allWithTS.reduce((a, b) => new Date(a.timestamp) > new Date(b.timestamp) ? a : b, null);
+      document.getElementById('latest-time').textContent = latest ? latest.timestamp : '-';
 
-    // 最近工作日
-    const allWithTS = mainData.filter(d => d.timestamp && d.timestamp.trim() !== "");
-    let latestTrack = allWithTS.reduce((max, curr) =>
-      (!max || new Date(curr.timestamp) > new Date(max.timestamp)) ? curr : max, null);
-    let latestTime = latestTrack && latestTrack.timestamp ? latestTrack.timestamp : '-';
+      const valid = allWithTS.filter(d => d.lat && d.lng);
+      const lastPos = valid.reduce((a, b) => new Date(a.timestamp) > new Date(b.timestamp) ? a : b, null);
+      document.getElementById('last-success-time').textContent = lastPos ? lastPos.timestamp : '-';
 
-    // 最後定位日
-    const allWithTSLatLng = mainData.filter(d =>
-      d.timestamp && d.timestamp.trim() !== "" &&
-      d.lat && d.lat.trim() !== "" &&
-      d.lng && d.lng.trim() !== ""
-    );
-    let lastSuccessTrack = allWithTSLatLng.reduce((max, curr) =>
-      (!max || new Date(curr.timestamp) > new Date(max.timestamp)) ? curr : max, null);
-    let lastSuccessTime = lastSuccessTrack && lastSuccessTrack.timestamp ? lastSuccessTrack.timestamp : '-';
-
-    document.getElementById('latest-time').textContent = latestTime;
-    document.getElementById('last-success-time').textContent = lastSuccessTime;
-
-    // 畫出主資料 sheet 的軌跡與最新位置
-    const trackPoints = allWithTSLatLng
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-      .map(d => ({
+      const points = valid.map(d => ({
         lat: parseFloat(d.lat),
         lng: parseFloat(d.lng),
         timestamp: d.timestamp,
         note: d.note
       }));
-    const latlngs = trackPoints.map(p => [p.lat, p.lng]);
-    if (latlngs.length) {
-      // 移動路徑與最新位置
-      const polyline = L.polyline(latlngs, { color: 'blue' }).addTo(trackGroup);
-      trackPoints.slice(0, -1).forEach(p => {
-        if (p.note && p.note.includes('發現點')) {
-          L.marker([p.lat, p.lng], { icon: eyeIcon })
-            .addTo(trackGroup)
-            .bindPopup(`<b>${p.note}</b><br>${p.timestamp}`);
-        } else {
-          L.circleMarker([p.lat, p.lng], {
-            radius: 6, color: 'gray', fillColor: 'gray', fillOpacity: 0.6
-          }).addTo(trackGroup).bindPopup(`<b>${p.note || '無備註'}</b><br>${p.timestamp}`);
-        }
-      });
-      const latestPos = trackPoints[trackPoints.length - 1];
-      L.marker([latestPos.lat, latestPos.lng], { icon: animalIcon })
-        .addTo(trackGroup)
-        .bindPopup(`<b>最新位置</b><br>${latestPos.timestamp}<br>${latestPos.note || ''}`);
+      const latlngs = points.map(p => [p.lat, p.lng]);
 
-      // 所有移動點位（不含路徑和最新位置）
-      trackPoints.forEach(p => {
-        if (p.note && p.note.includes('發現點')) {
-          L.marker([p.lat, p.lng], { icon: eyeIcon })
-            .addTo(trackPointsGroup)
-            .bindPopup(`<b>${p.note}</b><br>${p.timestamp}`);
-        } else {
-          L.circleMarker([p.lat, p.lng], {
-            radius: 6, color: 'gray', fillColor: 'gray', fillOpacity: 0.6
-          }).addTo(trackPointsGroup).bindPopup(`<b>${p.note || '無備註'}</b><br>${p.timestamp}`);
+      if (latlngs.length) {
+        L.polyline(latlngs, { color: 'blue' }).addTo(trackGroup);
+        points.forEach(p => {
+          const popup = `<b>${p.note || '無備註'}</b><br>${p.timestamp}`;
+          if (p.note && p.note.includes('發現點')) {
+            L.marker([p.lat, p.lng], { icon: eyeIcon }).addTo(trackGroup).bindPopup(popup);
+          } else {
+            L.circleMarker([p.lat, p.lng], {
+              radius: 6, color: 'gray', fillColor: 'gray', fillOpacity: 0.6
+            }).addTo(trackGroup).bindPopup(popup);
+          }
+        });
+        const latestPos = points[points.length - 1];
+        L.marker([latestPos.lat, latestPos.lng], { icon: animalIcon })
+          .addTo(trackGroup).bindPopup(`<b>最新位置</b><br>${latestPos.timestamp}<br>${latestPos.note || ''}`);
+        map.fitBounds(L.polyline(latlngs).getBounds());
+      }
+
+      markerData.forEach(p => {
+        if (p.lat && p.lng) {
+          L.marker([parseFloat(p.lat), parseFloat(p.lng)])
+            .addTo(markerGroup).bindPopup(`<b>${p.note || '標記點'}</b>`);
         }
       });
-      // 聚焦顯示範圍
-      map.fitBounds(L.polyline(latlngs).getBounds(), {maxZoom: 16});
+      monitorData.forEach(p => {
+        if (p.lat && p.lng) {
+          L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon: signalIcon })
+            .addTo(monitorGroup).bindPopup(`<b>${p.note || '監聽點'}</b>`);
+        }
+      });
     }
-
-    // marker sheet 的點位
-    markerData.filter(d => d.lat && d.lng)
-      .forEach(p => {
-        L.marker([parseFloat(p.lat), parseFloat(p.lng)])
-          .addTo(markerGroup)
-          .bindPopup(`<b>${p.note || '標記點'}</b>`);
-      });
-
-    // 監聽點 sheet 的點位
-    monitorData.filter(d => d.lat && d.lng)
-      .forEach(p => {
-        L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon: signalIcon })
-          .addTo(monitorGroup)
-          .bindPopup(`<b>${p.note || '監聽點'}</b>`);
-      });
-  }
-
-  // 載入個體清單並初始化選單
-  fetch('data/animal-data.json')
-    .then(res => res.json())
-    .then(data => {
-      individuals = data;
-      const select = document.getElementById('individual-select');
-      select.innerHTML = '';
-      individuals.forEach((item, idx) => {
-        const opt = document.createElement('option');
-        opt.value = idx;
-        opt.text = `${item.id} - ${item.name}`;
-        select.appendChild(opt);
-      });
-      // 預設載入第一個
-      if (individuals.length > 0) {
-        select.value = 0;
-        loadIndividual(individuals[0]);
-        renderIndividualInfo(individuals[0]);
-        currentIndividual = individuals[0];
-      }
-      select.addEventListener('change', function() {
-        const idx = parseInt(this.value);
-        if (!isNaN(idx) && individuals[idx]) {
-          showLoading(true);
-          loadIndividual(individuals[idx]);
-          renderIndividualInfo(individuals[idx]);
-          currentIndividual = individuals[idx];
-        }
-      });
-    });
-
-  // 根據選擇個體載入資料
-  function loadIndividual(indiv) {
-    showLoading(true);
-    mainData = null; markerData = null; monitorData = null;
-    // 取得 sheet id
-    const sheetIdMatch = indiv.sheet_url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (!sheetIdMatch) { alert("Google Sheet 網址格式錯誤！"); return; }
-    const sheetId = sheetIdMatch[1];
-    // 取得分頁 gid（建議將 gid 寫進 JSON）
-    const mainGid = indiv.track_points_gid || getGidFromUrl(indiv.sheet_url, indiv.track_points_tab);
-    const markerGid = indiv.annotations_gid || getGidFromUrl(indiv.sheet_url, indiv.annotations_tab);
-    const monitorGid = indiv.listening_points_gid || getGidFromUrl(indiv.sheet_url, indiv.listening_points_tab);
-
-    // 組合下載連結
-    const mainSheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${mainGid}`;
-    const markerSheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${markerGid}`;
-    const monitorSheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${monitorGid}`;
-
-    // 載入主資料
-    Papa.parse(mainSheetUrl, {
-      download: true,
-      header: true,
-      complete: function(results) {
-        mainData = results.data;
-        tryRender();
-        showLoading(false);
-      }
-    });
-    // 載入 marker
-    Papa.parse(markerSheetUrl, {
-      download: true,
-      header: true,
-      complete: function(results) {
-        markerData = results.data;
-        tryRender();
-      }
-    });
-    // 載入監聽點
-    Papa.parse(monitorSheetUrl, {
-      download: true,
-      header: true,
-      complete: function(results) {
-        monitorData = results.data;
-        tryRender();
-      }
-    });
-  }
   </script>
 </body>
 </html>
