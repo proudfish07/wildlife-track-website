@@ -1,11 +1,16 @@
 [
   {
-    "id": "250424PA01",
-    "name": "加酒穿",
-    "sheet_id": "1yIXjdfUI8TeV5ifB6oUSeFbfc0Hj2RmMiF1Q50W84pQ",
+    "id": "PA01",
+    "name": "穿山甲PA01",
+    "sheet_id": "1yIX...W84pQ",
     "main_gid": 0,
     "marker_gid": 730047739,
-    "monitor_gid": 1274944193
+    "monitor_gid": 1274944193,
+    "gpx": {
+      "car": "https://drive.google.com/uc?export=download&id=1ABC111",
+      "scooter": "https://drive.google.com/uc?export=download&id=1ABC222",
+      "hiking": "https://drive.google.com/uc?export=download&id=1ABC333"
+    }
   },
   {
     "id": "240808PA01",
