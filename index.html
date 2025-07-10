@@ -31,7 +31,8 @@
 <body>
   <div id="controls">
     <label for="indiv-select"><b>選擇個體：</b></label>
-    <select id="indiv-select"></select>
+    <select id="indiv-select" multiple size="5" style="min-width: 200px;"></select>
+    <button onclick="applySelection()">套用</button>
   </div>
   <div id="map"></div>
 
@@ -39,75 +40,111 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <script>
-    const map = L.map('map').setView([22.91, 121.09], 15);
-    const normalMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-    }).addTo(map);
+  const overlayMaps = {
+    "穿山甲移動路徑與最新位置": trackGroup,
+    "穿山甲所有移動點位": trackPointsGroup,
+    "標記點": markerGroup,
+    "監聽點": monitorGroup
+  };
+  L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
+  normalMap.addTo(map);
 
-    const trackGroup = L.layerGroup().addTo(map);
-    const trackPointsGroup = L.layerGroup().addTo(map);
-    const markerGroup = L.layerGroup().addTo(map);
-    const monitorGroup = L.layerGroup().addTo(map);
-
-    const overlayMaps = {
-      "穿山甲移動路徑與最新位置": trackGroup,
-      "穿山甲所有移動點位": trackPointsGroup,
-      "標記點": markerGroup,
-      "監聽點": monitorGroup
-    };
-    L.control.layers({ "一般地圖": normalMap }, overlayMaps, { collapsed: false }).addTo(map);
-    L.control.scale().addTo(map);
-
-    const animalIcon = L.icon({ iconUrl: 'animal-icon.png', iconSize: [40, 40], iconAnchor: [20, 40] });
-    const eyeIcon = L.icon({ iconUrl: 'eye-icon.png', iconSize: [25, 25], iconAnchor: [12, 12] });
-    const signalIcon = L.icon({ iconUrl: 'signal-icon.png', iconSize: [25, 25], iconAnchor: [12, 12] });
-
-    const infoControl = L.control({ position: 'topleft' });
-    infoControl.onAdd = function() {
-      const div = L.DomUtil.create('div', 'info-control');
-      div.innerHTML = `<b>最近工作日：</b><span id="latest-time">-</span><br>
-                       <b>最後定位日：</b><span id="last-success-time">-</span>`;
-      return div;
-    };
-    infoControl.addTo(map);
-
-    let individuals = [], currentIndividual = null;
-    let mainData = null, markerData = null, monitorData = null;
-    let layersInitialized = false;
-
-    fetch('data/animal-data.json')
-      .then(res => res.json())
-      .then(data => {
-        individuals = data;
-        const select = document.getElementById('indiv-select');
-        individuals.forEach((indiv, idx) => {
-          const opt = document.createElement('option');
-          opt.value = idx;
-          opt.textContent = `${indiv.name} (${indiv.id})`;
-          select.appendChild(opt);
-        });
-        select.addEventListener('change', () => {
-          const idx = parseInt(select.value);
-          if (individuals[idx]) loadIndividual(individuals[idx]);
-        });
-        if (individuals.length > 0) loadIndividual(individuals[0]);
+  fetch('data/animal-data.json')
+    .then(res => res.json())
+    .then(data => {
+      individuals = data;
+      const select = document.getElementById('indiv-select');
+      individuals.forEach((indiv, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = `${indiv.name} (${indiv.id})`;
+        select.appendChild(opt);
       });
+    });
 
-    function loadIndividual(indiv) {
-      currentIndividual = indiv;
-      mainData = markerData = monitorData = null;
-      layersInitialized = false;
-      trackGroup.clearLayers();
-      trackPointsGroup.clearLayers();
-      markerGroup.clearLayers();
-      monitorGroup.clearLayers();
+  function applySelection() {
+    const select = document.getElementById('indiv-select');
+    const selected = Array.from(select.selectedOptions).map(opt => individuals[opt.value]);
+    loadMultipleIndividuals(selected);
+  }
 
+  function loadMultipleIndividuals(individuals) {
+    trackGroup.clearLayers();
+    trackPointsGroup.clearLayers();
+    markerGroup.clearLayers();
+    monitorGroup.clearLayers();
+
+    individuals.forEach(indiv => {
       const base = `https://docs.google.com/spreadsheets/d/${indiv.sheet_id}/export?format=csv&gid=`;
       const urls = {
         main: base + indiv.main_gid,
         marker: base + indiv.marker_gid,
         monitor: base + indiv.monitor_gid
       };
+
+      let mainData = null, markerData = null, monitorData = null;
+
+      function tryRender() {
+        if (!mainData || !markerData || !monitorData) return;
+
+        const allWithTS = mainData.filter(d => d.timestamp && d.timestamp.trim() !== "");
+        const allWithTSLatLng = mainData.filter(d =>
+          d.timestamp && d.timestamp.trim() !== "" &&
+          d.lat && d.lat.trim() !== "" &&
+          d.lng && d.lng.trim() !== ""
+        );
+
+        const trackPoints = allWithTSLatLng
+          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+          .map(d => ({
+            lat: parseFloat(d.lat),
+            lng: parseFloat(d.lng),
+            timestamp: d.timestamp,
+            note: d.note
+          }));
+
+        const latlngs = trackPoints.map(p => [p.lat, p.lng]);
+        if (latlngs.length) {
+          L.polyline(latlngs, {
+            color: '#3366cc',
+            weight: 2,
+            dashArray: '4,4',
+            opacity: 0.5
+          }).addTo(trackGroup);
+
+          trackPoints.forEach(p => {
+            const popup = `<b>${p.note || '無備註'}</b><br>${p.timestamp}`;
+            if (p.note && p.note.includes('發現點')) {
+              L.marker([p.lat, p.lng], { icon: eyeIcon })
+                .addTo(trackPointsGroup).bindPopup(popup);
+            } else {
+              L.circleMarker([p.lat, p.lng], {
+                radius: 6, color: 'gray', fillColor: 'gray', fillOpacity: 0.6
+              }).addTo(trackPointsGroup).bindPopup(popup);
+            }
+          });
+
+          const latestPos = trackPoints[trackPoints.length - 1];
+          L.marker([latestPos.lat, latestPos.lng], { icon: animalIcon })
+            .addTo(trackGroup).bindPopup(`<b>最新位置</b><br>${latestPos.timestamp}<br>${latestPos.note || ''}`);
+
+          map.fitBounds(L.polyline(latlngs).getBounds());
+        }
+
+        markerData.forEach(p => {
+          if (p.lat && p.lng) {
+            L.marker([parseFloat(p.lat), parseFloat(p.lng)])
+              .addTo(markerGroup).bindPopup(`<b>${p.note || '標記點'}</b>`);
+          }
+        });
+
+        monitorData.forEach(p => {
+          if (p.lat && p.lng) {
+            L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon: signalIcon })
+              .addTo(monitorGroup).bindPopup(`<b>${p.note || '監聽點'}</b>`);
+          }
+        });
+      }
 
       Papa.parse(urls.main, {
         download: true, header: true,
@@ -121,75 +158,8 @@
         download: true, header: true,
         complete: r => { monitorData = r.data; tryRender(); }
       });
-    }
-
-    function tryRender() {
-      if (!mainData || !markerData || !monitorData) return;
-
-      const allWithTS = mainData.filter(d => d.timestamp && d.timestamp.trim() !== "");
-      let latestTrack = null;
-      if (allWithTS.length > 0) {
-        latestTrack = allWithTS.reduce((max, curr) =>
-          new Date(curr.timestamp) > new Date(max.timestamp) ? curr : max
-        );
-      }
-      document.getElementById('latest-time').textContent = latestTrack ? latestTrack.timestamp : '無資料';
-
-      const allWithTSLatLng = mainData.filter(d =>
-        d.timestamp && d.timestamp.trim() !== "" &&
-        d.lat && d.lat.trim() !== "" &&
-        d.lng && d.lng.trim() !== ""
-      );
-      let lastSuccessTrack = null;
-      if (allWithTSLatLng.length > 0) {
-        lastSuccessTrack = allWithTSLatLng.reduce((max, curr) =>
-          new Date(curr.timestamp) > new Date(max.timestamp) ? curr : max
-        );
-      }
-      document.getElementById('last-success-time').textContent = lastSuccessTrack ? lastSuccessTrack.timestamp : '無資料';
-
-      const trackPoints = allWithTSLatLng
-        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-        .map(d => ({
-          lat: parseFloat(d.lat),
-          lng: parseFloat(d.lng),
-          timestamp: d.timestamp,
-          note: d.note
-        }));
-
-      const latlngs = trackPoints.map(p => [p.lat, p.lng]);
-      if (latlngs.length) {
-        L.polyline(latlngs, { color: 'blue' }).addTo(trackGroup);
-        trackPoints.forEach(p => {
-          const popup = `<b>${p.note || '無備註'}</b><br>${p.timestamp}`;
-          if (p.note && p.note.includes('發現點')) {
-            L.marker([p.lat, p.lng], { icon: eyeIcon }).addTo(trackGroup).bindPopup(popup);
-          } else {
-            L.circleMarker([p.lat, p.lng], {
-              radius: 6, color: 'gray', fillColor: 'gray', fillOpacity: 0.6
-            }).addTo(trackGroup).bindPopup(popup);
-          }
-        });
-        const latestPos = trackPoints[trackPoints.length - 1];
-        L.marker([latestPos.lat, latestPos.lng], { icon: animalIcon })
-          .addTo(trackGroup).bindPopup(`<b>最新位置</b><br>${latestPos.timestamp}<br>${latestPos.note || ''}`);
-        map.fitBounds(L.polyline(latlngs).getBounds());
-      }
-
-      markerData.forEach(p => {
-        if (p.lat && p.lng) {
-          L.marker([parseFloat(p.lat), parseFloat(p.lng)])
-            .addTo(markerGroup).bindPopup(`<b>${p.note || '標記點'}</b>`);
-        }
-      });
-
-      monitorData.forEach(p => {
-        if (p.lat && p.lng) {
-          L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon: signalIcon })
-            .addTo(monitorGroup).bindPopup(`<b>${p.note || '監聽點'}</b>`);
-        }
-      });
-    }
-  </script>
+    });
+  }
+</script>
 </body>
 </html>
