@@ -37,7 +37,9 @@
   };
   L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
   normalMap.addTo(map);
-
+  
+  let individuals = [];
+  
   fetch('data/animal-data.json')
     .then(res => res.json())
     .then(data => {
