@@ -29,6 +29,28 @@
 </div>
 
 <script>
+  let individuals = [];
+  const map = L.map('map').setView([22.91, 121.09], 15);
+  const normalMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+  }).addTo(map);
+  const contourMap = L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data: &copy; OpenTopoMap (CC-BY-SA)', maxZoom: 17
+  });
+  const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri', maxZoom: 19
+  });
+  const baseMaps = {
+    "一般地圖": normalMap,
+    "等高線地圖": contourMap,
+    "衛星圖": satelliteMap
+  };
+
+  const trackGroup = L.layerGroup().addTo(map);
+  const trackPointsGroup = L.layerGroup().addTo(map);
+  const markerGroup = L.layerGroup().addTo(map);
+  const monitorGroup = L.layerGroup().addTo(map);
+
   const overlayMaps = {
     "穿山甲移動路徑與最新位置": trackGroup,
     "穿山甲所有移動點位": trackPointsGroup,
@@ -36,10 +58,11 @@
     "監聽點": monitorGroup
   };
   L.control.layers(baseMaps, overlayMaps, { collapsed: false, position: 'topright' }).addTo(map);
-  normalMap.addTo(map);
-  
-  let individuals = [];
-  
+
+  const animalIcon = L.icon({ iconUrl: 'animal-icon.png', iconSize: [40, 40], iconAnchor: [20, 40] });
+  const eyeIcon = L.icon({ iconUrl: 'eye-icon.png', iconSize: [25, 25], iconAnchor: [12, 12] });
+  const signalIcon = L.icon({ iconUrl: 'signal-icon.png', iconSize: [25, 25], iconAnchor: [12, 12] });
+
   fetch('data/animal-data.json')
     .then(res => res.json())
     .then(data => {
@@ -60,10 +83,8 @@
     const selectedDate = dateInput.value ? new Date(dateInput.value) : null;
 
     if (selected) {
-      loadIndividual(selected); // always render base layers
-      if (selectedDate) {
-        loadRawDataByDate(selected, selectedDate);
-      }
+      loadIndividual(selected);
+      if (selectedDate) loadRawDataByDate(selected, selectedDate);
     }
   }
 
@@ -127,10 +148,7 @@
     const latlngs = trackPoints.map(p => [p.lat, p.lng]);
     if (latlngs.length) {
       L.polyline(latlngs, {
-        color: '#3366cc',
-        weight: 2,
-        dashArray: '4,4',
-        opacity: 0.5
+        color: '#3366cc', weight: 2, dashArray: '4,4', opacity: 0.5
       }).addTo(trackGroup);
 
       trackPoints.forEach(p => {
@@ -171,5 +189,6 @@
     });
   }
 </script>
+
 </body>
 </html>
